@@ -22,14 +22,14 @@ NLTK
 CNN/DM
 
 ```bash
-python bart_test run_cnndm.json
-# update json file to fit your required batch size etc.
+python bart_test.py run_cnndm.json
+# update json file to fit your required batch size, available devices etc.
 ```
 
 XSUM
 
 ```bash
-python bart_test run_xsum.json
+python bart_test.py run_xsum.json
 ```
 
 
