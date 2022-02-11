@@ -1,6 +1,6 @@
 ## PyTorch implementation of Differentiable N-gram Objective on Abstractive Summarization
 
-
+[Differentiable N-gram Objective on Abstractive Summarization](https://arxiv.org/abs/2202.04003)
 
 ### Dependencies of our run
 
@@ -16,16 +16,23 @@ rouge 1.0.1
 
 NLTK
 
+
+
 ### To run the code
 CNN/DM
 
+```bash
 python bart_test run_cnndm.json
-
-
+# update json file to fit your required batch size etc.
+```
 
 XSUM
 
+```bash
 python bart_test run_xsum.json
+```
+
+
 
 #### To control running with/without n-gram objective
 
