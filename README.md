@@ -37,7 +37,7 @@ python bart_test.py run_xsum.json
 #### To control running with/without n-gram objective
 
 ```python
-# line 1537 to line 1545 in bart_custom.py, in default.
+# line 1434 to line 1443 in bart_custom.py, in default.
 USE_NgramsLoss = True # if False, any n-gram objective will be skipped
 USE_1GramLoss = False
 USE_2GramLoss = True

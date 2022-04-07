@@ -1430,6 +1430,17 @@ class BartForConditionalGeneration(BartPretrainedModel):
         self.loss_Ngrams = {'l0':0, 'l1':0, 'l2': 0, 'l3':0, 'l4':0, 'l5':0,'l6':0,'c':0}
         self.emb_dim = config.d_model
         self.vocab_size = config.vocab_size
+
+        self.log_margin = 1000
+        self.USE_NgramsLoss = True
+        self.USE_1GramLoss = False
+        self.USE_2GramLoss = True
+        self.USE_3GramLoss = False
+        self.USE_4GramLoss = False
+        self.USE_5GramLoss = False
+        self.USE_BoN = False
+        self.USE_Ngrams_reward = False
+        self.USE_p2loss = False
         
     def set_tokenizer(self, tokenizer):
         self.tokenizer = tokenizer
@@ -1533,18 +1544,8 @@ class BartForConditionalGeneration(BartPretrainedModel):
             masked_lm_loss = loss_fct(lm_logits.view(-1, self.config.vocab_size), labels.view(-1))
             loss_item = masked_lm_loss.item()
 
-        log_margin = 1000
-        USE_NgramsLoss = True
-        USE_1GramLoss = False
-        USE_2GramLoss = True
-        USE_3GramLoss = False
-        USE_4GramLoss = False
-        USE_5GramLoss = False
-        USE_BoN = False
-        USE_Ngrams_reward = False
-        USE_p2loss = False
         
-        if USE_NgramsLoss and self.training:
+        if self.USE_NgramsLoss and self.training:
             oneGram_loss, twoGrams_loss, triGrams_loss, BoN_NAT_loss, fourGrams_loss, fiveGrams_loss = 0, 0, 0, 0, 0, 0
 
             btz, tgt_size = labels.shape
@@ -1566,7 +1567,7 @@ class BartForConditionalGeneration(BartPretrainedModel):
                 summary_prob = summary_prob[:seq_size, :]
                 prob_values, cand_indices = torch.max(summary_prob, dim=-1)
 
-                if USE_BoN:
+                if self.USE_BoN:
                     # code from https://github.com/ictnlp/BoN-NAT/blob/master/model.py
                     two_grams = Counter()
                     for j in range(seq_size - 1):
@@ -1591,7 +1592,7 @@ class BartForConditionalGeneration(BartPretrainedModel):
                     BoN_NAT_loss += match_gram / (seq_size - 1)
                     continue
                 
-                if USE_p2loss: # from https://github.com/ictnlp/GS4NMT/blob/master/models/losser.py
+                if self.USE_p2loss: # from https://github.com/ictnlp/GS4NMT/blob/master/models/losser.py
                     match_two_gram = 0
                     sum_two_gram = 0 
                     two_gram = Counter()
@@ -1614,12 +1615,12 @@ class BartForConditionalGeneration(BartPretrainedModel):
                     twoGrams_loss += -1 * match_two_gram / sum_two_gram
                     continue
 
-                if (USE_1GramLoss or USE_2GramLoss or USE_3GramLoss or USE_4GramLoss or USE_5GramLoss) == False: 
+                if (self.USE_1GramLoss or self.USE_2GramLoss or self.USE_3GramLoss or self.USE_4GramLoss or self.USE_5GramLoss) == False: 
                     continue
                 
                 oneGrams, twoGrams, triGrams, fourGrams, fiveGrams = dict(), dict(), dict(), dict(), dict() # build dict for two and tri grams in gold summary, value=[]
                 for s_i in range(seq_size):
-                    if USE_Ngrams_reward:
+                    if self.USE_Ngrams_reward:
                         _key = goldsum_i[s_i].tolist()
                         _value = oneGrams.get(_key)
                         if _value is None:
@@ -1684,23 +1685,23 @@ class BartForConditionalGeneration(BartPretrainedModel):
                             _key = '_'.join([str(i) for i in goldsum_i[s_i:s_i+5].tolist()])
                             fiveGrams[_key] = []
 
-                if USE_Ngrams_reward == False:
+                if self.USE_Ngrams_reward == False:
                     for s_i in range(seq_size):
-                        if USE_1GramLoss:
+                        if self.USE_1GramLoss:
                             _key = cand_indices[s_i].tolist()
                             _value = oneGrams.get(_key)
                             if _value is not None:
                                 _value.append(prob_values[s_i])
                                 oneGrams[_key] = _value
 
-                        if USE_2GramLoss and s_i <= seq_size - 2:
+                        if self.USE_2GramLoss and s_i <= seq_size - 2:
                             _key = '_'.join([str(i) for i in cand_indices[s_i:s_i+2].tolist()])
                             _value = twoGrams.get(_key)
                             if _value is not None: # only if this ngram match goldsum's ngram
                                 _value.append(torch.prod(prob_values[s_i:s_i+2]))
                                 twoGrams[_key] = _value
 
-                        if USE_3GramLoss and s_i <= seq_size - 3:
+                        if self.USE_3GramLoss and s_i <= seq_size - 3:
                             token_list = [str(i) for i in cand_indices[s_i:s_i+3].tolist()]
                             _key = '_'.join(token_list)
                             _value = triGrams.get(_key)
@@ -1709,7 +1710,7 @@ class BartForConditionalGeneration(BartPretrainedModel):
                                     _value.append(torch.prod(prob_values[s_i:s_i+3]))
                                     triGrams[_key] = _value
 
-                        if USE_4GramLoss and s_i <= seq_size - 4:
+                        if self.USE_4GramLoss and s_i <= seq_size - 4:
                             token_list = [str(i) for i in cand_indices[s_i:s_i+4].tolist()]
                             _key = '_'.join(token_list)
                             _value = fourGrams.get(_key)
@@ -1718,7 +1719,7 @@ class BartForConditionalGeneration(BartPretrainedModel):
                                     _value.append(torch.prod(prob_values[s_i:s_i+4]))
                                     fourGrams[_key] = _value
 
-                        if USE_5GramLoss and s_i <= seq_size - 5:
+                        if self.USE_5GramLoss and s_i <= seq_size - 5:
                             token_list = [str(i) for i in cand_indices[s_i:s_i+5].tolist()]
                             _key = '_'.join(token_list)
                             _value = fiveGrams.get(_key)
@@ -1727,14 +1728,14 @@ class BartForConditionalGeneration(BartPretrainedModel):
                                     _value.append(torch.prod(prob_values[s_i:s_i+5]))
                                     fiveGrams[_key] = _value
                 
-                if USE_1GramLoss:
+                if self.USE_1GramLoss:
                     each_1Gram_loss = 1 / seq_size
                     for key, value in oneGrams.items():
                         num_of_1Grams = len(value)
                         for similarity in value:
                             oneGram_loss_i -= (each_1Gram_loss / num_of_1Grams * similarity)
 
-                if USE_2GramLoss and seq_size > 1:
+                if self.USE_2GramLoss and seq_size > 1:
                     each_2Gram_loss = 1 / (seq_size - 1) # evenly split possible loss for ngrams
                     for key, value in twoGrams.items():
                         num_of_2Grams = len(value)
@@ -1743,21 +1744,21 @@ class BartForConditionalGeneration(BartPretrainedModel):
                             # for this twogram, we evenly distribute possible loss each multiple instance in generated summary to reduce, therefore (each_2Gram_loss / num_of_2Grams)
                             # for each instance, multiple their dot_value
 
-                if USE_3GramLoss and seq_size > 2:
+                if self.USE_3GramLoss and seq_size > 2:
                     each_3Gram_loss = 1 / (seq_size - 2)
                     for key, value in triGrams.items():
                         num_of_3Grams = len(value)
                         for similarity in value:
                             triGram_loss_i -= (each_3Gram_loss / num_of_3Grams * similarity)
 
-                if USE_4GramLoss and seq_size > 3:
+                if self.USE_4GramLoss and seq_size > 3:
                     each_4Gram_loss = 1 / (seq_size - 3)
                     for key, value in fourGrams.items():
                         num_of_4Grams = len(value)
                         for similarity in value:
                             fourGram_loss_i -= (each_4Gram_loss / num_of_4Grams * similarity)
 
-                if USE_5GramLoss and seq_size > 4:
+                if self.USE_5GramLoss and seq_size > 4:
                     each_5Gram_loss = 1 / (seq_size - 4)
                     for key, value in fiveGrams.items():
                         num_of_5Grams = len(value)
@@ -1777,7 +1778,7 @@ class BartForConditionalGeneration(BartPretrainedModel):
             fiveGrams_loss /= btz
             BoN_NAT_loss /= btz
 
-            if USE_BoN: # code from https://github.com/ictnlp/BoN-NAT/blob/master/model.py
+            if self.USE_BoN: # code from https://github.com/ictnlp/BoN-NAT/blob/master/model.py
                 BoN_NAT_loss *= -1
 
             self.loss_Ngrams['l1'] += loss_item
@@ -1807,7 +1808,7 @@ class BartForConditionalGeneration(BartPretrainedModel):
                 self.loss_Ngrams['l6'] += fiveGrams_loss
             self.loss_Ngrams['c'] += 1
 
-            if self.train_count % log_margin == 0 and self.train_count > 0:
+            if self.train_count % self.log_margin == 0 and self.train_count > 0:
                 if self.loss_Ngrams['c'] >= 1:
                     loss_avg = round(self.loss_Ngrams['l1']/self.loss_Ngrams['c'], 4)
                     loss_oneGrams_avg = round(self.loss_Ngrams['l0']/self.loss_Ngrams['c'], 4)
